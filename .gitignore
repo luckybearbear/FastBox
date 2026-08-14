@@ -32,3 +32,7 @@ Thumbs.db
 # ===== 临时文件 =====
 *.tmp
 *.swp
+
+# ===== 工作区元数据 / 分发产物 =====
+.workbuddy/
+fastbox-dev-workflow.zip
