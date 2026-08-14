@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>FastBox</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="search-bar">
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="searchInput" type="text" placeholder="搜索工具、文件、脚本…  Esc 关闭" autocomplete="off" spellcheck="false" />
+      <span id="gatewayBadge" class="badge badge-wait" title="网关状态">…</span>
+    </header>
+
+    <main id="resultList" class="result-list">
+      <div id="emptyState" class="empty-state">
+        <p class="empty-title">输入关键词开始搜索</p>
+        <p class="empty-hint">支持：内置工具 · 本地文件 · Python 脚本 · SQL 脚本</p>
+      </div>
+    </main>
+
+    <footer class="status-bar">
+      <span id="statusText">就绪</span>
+      <span id="toast" class="toast"></span>
+    </footer>
+  </div>
+
+  <div id="detailOverlay" class="overlay hidden">
+    <div class="detail-panel">
+      <header class="detail-header">
+        <span id="detailTitle">详情</span>
+        <button id="detailClose" class="btn-close" title="关闭">×</button>
+      </header>
+      <pre id="detailContent" class="detail-content"></pre>
+    </div>
+  </div>
+
+  <div id="argOverlay" class="overlay hidden">
+    <div class="detail-panel arg-panel">
+      <header class="detail-header">
+        <span id="argTitle">插件参数</span>
+        <button id="argClose" class="btn-close" title="取消">×</button>
+      </header>
+      <div id="argForm" class="arg-form"></div>
+      <footer class="arg-actions">
+        <button id="argCancel" class="btn btn-ghost">取消</button>
+        <button id="argConfirm" class="btn btn-primary">执行</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

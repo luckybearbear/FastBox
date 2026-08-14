@@ -1,0 +1,15 @@
+{
+  "name": "fastbox-electron",
+  "version": "0.1.0",
+  "description": "FastBox UI 层 — 跨平台快捷启动工具",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "author": "FastBox",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^43.0.0"
+  }
+}

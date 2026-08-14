@@ -1,0 +1,7 @@
+{
+  "name": "fail-test",
+  "description": "异常测试插件（故意抛错，验证 JS 插件异常隔离与失败留痕）",
+  "kind": "js",
+  "keywords": ["fail-test", "js异常", "抛错"],
+  "args_schema": []
+}

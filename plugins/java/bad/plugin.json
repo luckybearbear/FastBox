@@ -1,0 +1,9 @@
+{
+  "name": "bad-plugin-test",
+  "description": "异常测试插件（仅用于沙箱验证）",
+  "kind": "java",
+  "sandbox": "process",
+  "keywords": ["bad-test", "异常测试"],
+  "main": "com.fastbox.plugin.bad.BadPlugin",
+  "args_schema": []
+}

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FastBox 网关日志配置
+  - 控制台 + 文件（data/logs/gateway.log）
+  - 轮转：按天 + 单文件 10MB 上限，保留 7 份历史
+  - 级别：FASTBOX_LOG_LEVEL 环境变量（DEBUG/INFO/WARN/ERROR），默认 INFO
+  - 数据目录：FASTBOX_DATA_DIR 环境变量，默认 <cwd>/../data（Electron 拉起时 cwd 为 java-gateway）
+-->
+<configuration>
+  <property name="logDir" value="${FASTBOX_DATA_DIR:-../data}/logs"/>
+  <property name="logLevel" value="${FASTBOX_LOG_LEVEL:-INFO}"/>
+
+  <!-- 控制台：始终输出（级别同样受控） -->
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <charset>UTF-8</charset>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- 文件：按天 + 10MB 轮转，保留 7 份 -->
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${logDir}/gateway.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${logDir}/gateway.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+      <maxFileSize>10MB</maxFileSize>
+      <maxHistory>7</maxHistory>
+      <totalSizeCap>100MB</totalSizeCap>
+    </rollingPolicy>
+    <encoder>
+      <charset>UTF-8</charset>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <root level="${logLevel}">
+    <appender-ref ref="CONSOLE"/>
+    <appender-ref ref="FILE"/>
+  </root>
+</configuration>

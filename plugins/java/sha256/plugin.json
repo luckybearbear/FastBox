@@ -1,0 +1,11 @@
+{
+  "name": "sha256",
+  "description": "SHA-256 摘要计算与校验工具",
+  "kind": "java",
+  "sandbox": "process",
+  "keywords": ["sha256", "摘要", "sha", "哈希", "hash", "校验"],
+  "main": "com.fastbox.plugin.sha256.Sha256Plugin",
+  "args_schema": [
+    { "name": "文本", "type": "string", "required": true, "hint": "要摘要的文本；含「校验」时输入 原文=期望摘要" }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "时间戳转换",
+  "description": "Unix 时间戳与日期互转，快速查询当前时间戳",
+  "keywords": ["时间戳", "timestamp", "当前时间"],
+  "args_schema": [
+    {"name": "时间戳(可选)", "type": "string", "required": false}
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "文件统计",
+  "description": "统计指定目录的文件数量、总大小与扩展名分布",
+  "keywords": ["文件统计", "file-stats", "fstats"],
+  "args_schema": [
+    {"name": "目录路径", "type": "string", "required": true}
+  ]
+}

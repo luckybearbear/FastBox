@@ -1,0 +1,34 @@
+# ===== 构建产物 =====
+# Java / Maven
+java-gateway/target/
+java-gateway/dependency-reduced-pom.xml
+plugins/java/**/out/
+plugins/java/**/*.jar
+
+# Node / Electron
+electron/node_modules/
+electron/dist/
+electron/release/
+
+# Python
+python-runtime/.venv/
+__pycache__/
+*.py[cod]
+
+# ===== 运行时数据（SQLite / 缓存 / 临时）=====
+data/
+
+# ===== 日志 =====
+*.log
+logs/
+
+# ===== IDE / 系统文件 =====
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ===== 临时文件 =====
+*.tmp
+*.swp

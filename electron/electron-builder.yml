@@ -1,0 +1,82 @@
+# FastBox electron-builder 打包骨架（P3 评估产物，2026-08-14）
+#
+# 目标形态：跨平台分发包 = Electron 外壳 + 内置 JRE(jlink) + 便携 Python + 网关 jar + 初始插件
+# 完整打包为 P3 待办；本文件为配置骨架，可通过 `npx electron-builder --win` 试跑验证
+#
+# 打包前置准备（在正式打包前需完成，见 docs/architecture.md 第九节）：
+#   1. jlink 生成精简 JRE：./scripts/build-runtime.ps1（骨架未含脚本，命令示例见第九节）
+#   2. 便携 Python：python-runtime/.venv 已含解释器 + fastapi/uvicorn，随 extraResources 拷贝
+#   3. 路径改造：main.js 打包模式需从 process.resourcesPath 解析 GATEWAY_JAR / python / data 目录
+#   4. 图标：assets/icon.ico (win)、assets/icon.icns (mac) 目前为空目录，需补充
+
+appId: com.fastbox.app
+productName: FastBox
+copyright: Copyright © 2026 FastBox
+
+directories:
+  output: dist
+  buildResources: assets
+
+# 只打包 UI 代码进 asar；node_modules 中 electron 为 devDependency 不参与打包
+files:
+  - src/**/*
+  - package.json
+
+# 运行时外部组件：不进 asar，放 resources/ 下（打包后通过 process.resourcesPath 访问）
+extraResources:
+  # Java 网关 shaded jar（由 mvn package 产出）
+  - from: ../java-gateway/target/fastbox-gateway.jar
+    to: runtime/gateway/fastbox-gateway.jar
+  # 精简 JRE 17（jlink 产物，目标 <projectRoot>/runtime/jre17）
+  - from: ../runtime/jre17
+    to: runtime/jre17
+  # 便携 Python 运行时：解释器 + 依赖 + 内置 Python 插件
+  - from: ../python-runtime
+    to: runtime/python
+    filter:
+      - main.py
+      - requirements.txt
+      - plugins/**/*
+      - .venv/**/*
+  # 初始插件目录（js/python/java 三类；打包版安装后用户可自行扩展）
+  - from: ../plugins
+    to: plugins
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: FastBox
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: assets/icon.icns
+  category: public.app-category.productivity
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Utility
+
+# 自动更新：electron-updater generic provider
+# 自建静态更新服务器（放 latest.yml + 安装包 + blockmap），URL 为占位，部署时替换
+# 备选：GitHub Releases（provider: github）——FastBox 暂无公开仓库，故默认自建
+publish:
+  provider: generic
+  url: https://example.com/fastbox/releases
+
+# 版本契约：主版本号整包同步；Java/Python 组件版本内嵌不单独更新
