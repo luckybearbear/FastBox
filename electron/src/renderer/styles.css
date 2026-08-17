@@ -10,6 +10,7 @@
   --text-dim: #9a9ea8;
   --accent: #4f8cff;
   --accent-dim: #2b5cb3;
+  --star: #f0c040;
   --radius: 8px;
 }
 
@@ -102,6 +103,7 @@ html, body {
   padding: 10px 12px;
   border-radius: var(--radius);
   cursor: pointer;
+  position: relative;
 }
 .result-item:hover { background: var(--bg-hover); }
 .result-item.active { background: var(--bg-active); }
@@ -116,12 +118,15 @@ html, body {
   font-weight: 600;
   flex-shrink: 0;
 }
-.type-tool    { background: #33415e; color: #85b7eb; }
-.type-file    { background: #33462f; color: #97c459; }
-.type-python  { background: #1f4d44; color: #5dcaa5; }
-.type-sql     { background: #4a3f1f; color: #ef9f27; }
-.type-plugin  { background: #45324e; color: #c9a0dc; }
-.type-command { background: #4a3131; color: #f09595; }
+.type-tool     { background: #33415e; color: #85b7eb; }
+.type-file     { background: #33462f; color: #97c459; }
+.type-python   { background: #1f4d44; color: #5dcaa5; }
+.type-sql      { background: #4a3f1f; color: #ef9f27; }
+.type-plugin   { background: #45324e; color: #c9a0dc; }
+.type-command  { background: #4a3131; color: #f09595; }
+.type-js       { background: #4a431f; color: #f0d040; }
+.type-java     { background: #3d2a1f; color: #e8a070; }
+.type-favorite { background: #4a3f1f; color: var(--star); }
 
 .result-item .item-main { flex: 1; min-width: 0; }
 .result-item .item-title {
@@ -147,18 +152,124 @@ html, body {
   flex-shrink: 0;
 }
 
-/* ---- 底部状态栏 ---- */
-.status-bar {
+/* 收藏星标按钮 */
+.fav-star {
+  width: 24px;
+  height: 24px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 6px 16px;
-  border-top: 1px solid var(--border);
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 15px;
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.result-item:hover .fav-star,
+.result-item.active .fav-star { opacity: 0.6; }
+.fav-star:hover { opacity: 1 !important; color: var(--star); }
+.fav-star.starred { opacity: 1; color: var(--star); }
+
+/* 历史/收藏列表项 */
+.panel-header {
+  padding: 8px 14px 4px;
   font-size: 11px;
   color: var(--text-dim);
-  background: #232428;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
-.toast { color: var(--accent); transition: opacity .3s; }
+.panel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.panel-item:hover { background: var(--bg-hover); }
+.panel-item .panel-icon {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.panel-item .panel-main { flex: 1; min-width: 0; }
+.panel-item .panel-title {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-item .panel-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.panel-item .panel-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.panel-item .panel-delete {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.panel-item:hover .panel-delete { opacity: 0.7; }
+.panel-item .panel-delete:hover { opacity: 1; color: #e24b4a; }
+
+/* ---- 底部工具栏 ---- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-top: 1px solid var(--border);
+  background: #232428;
+  min-height: 36px;
+}
+.toolbar-left { display: flex; gap: 2px; }
+.toolbar-center { flex: 1; text-align: center; }
+.toolbar-right { display: flex; align-items: center; }
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.tab-btn:hover { color: var(--text); background: var(--bg-hover); }
+.tab-btn.active { color: var(--accent); background: var(--bg-active); }
+.tab-icon { font-size: 14px; }
+
+.toast { color: var(--accent); transition: opacity .3s; font-size: 11px; }
 
 /* ---- 详情弹窗 ---- */
 .overlay {

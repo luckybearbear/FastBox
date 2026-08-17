@@ -37,6 +37,12 @@ public class ApiRoutes {
         // 执行留痕：Electron 主进程上报 JS 插件执行记录 + 查询入口
         app.post("/api/exec-log", this::execLog);
         app.get("/api/exec-logs", this::execLogs);
+        // 搜索历史
+        app.get("/api/history", this::listHistory);
+        // 收藏管理
+        app.get("/api/favorites", this::listFavorites);
+        app.post("/api/favorites", this::addFavorite);
+        app.post("/api/favorites/delete", this::deleteFavorite);
     }
 
     /* ---- GET /health ---- */
@@ -114,5 +120,34 @@ public class ApiRoutes {
         int limit = ctx.queryParamAsClass("limit", Integer.class).getOrDefault(50);
         String kind = ctx.queryParam("kind");
         ctx.json(action.listExecLogs(limit, kind));
+    }
+
+    /* ---- GET /api/history?limit=20 ---- */
+
+    private void listHistory(Context ctx) {
+        int limit = ctx.queryParamAsClass("limit", Integer.class).getOrDefault(20);
+        ctx.json(Map.of("history", search.listHistory(limit)));
+    }
+
+    /* ---- GET /api/favorites ---- */
+
+    private void listFavorites(Context ctx) {
+        ctx.json(action.execute("list_favorites", Map.of()));
+    }
+
+    /* ---- POST /api/favorites {name, action, payload} ---- */
+
+    @SuppressWarnings("unchecked")
+    private void addFavorite(Context ctx) {
+        Map<String, Object> req = ctx.bodyAsClass(Map.class);
+        ctx.json(action.execute("add_favorite", req));
+    }
+
+    /* ---- POST /api/favorites/delete {id} ---- */
+
+    @SuppressWarnings("unchecked")
+    private void deleteFavorite(Context ctx) {
+        Map<String, Object> req = ctx.bodyAsClass(Map.class);
+        ctx.json(action.execute("delete_favorite", req));
     }
 }

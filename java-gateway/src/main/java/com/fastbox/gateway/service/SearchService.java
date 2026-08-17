@@ -8,8 +8,12 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -23,6 +27,7 @@ public class SearchService {
     private static final String TOOL_CALC = "calc";
     private static final String TOOL_FILES = "files";
     private static final String TOOL_HELP = "help";
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public List<ResultItem> search(String q) {
         long start = System.currentTimeMillis();
@@ -50,8 +55,9 @@ public class SearchService {
             searchFiles(kw.replaceFirst("^file:", "").trim(), results);
         }
 
-        // 6. 写执行日志（不阻塞）
+        // 6. 写执行日志 + 搜索历史（不阻塞）
         logSearch(kw, results.size(), System.currentTimeMillis() - start);
+        recordHistory(kw);
 
         return results;
     }
@@ -164,15 +170,30 @@ public class SearchService {
             ps.setString(1, "%" + kw + "%");
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    Map<String, Object> payload = new HashMap<>();
-                    payload.put("favoriteId", rs.getInt("id"));
-                    payload.put("name", rs.getString("name"));
-                    out.add(ResultItem.of("favorite", "★ " + rs.getString("name"), "收藏项", "favorite", payload));
+                    String name = rs.getString("name");
+                    String action = rs.getString("action");
+                    String payloadJson = rs.getString("payload");
+                    Map<String, Object> savedPayload = mapper.readValue(payloadJson, Map.class);
+                    // 保留 favoriteId 用于删除，同时透传原始 action+payload 供直接执行
+                    savedPayload.put("favoriteId", rs.getInt("id"));
+                    String kind = inferKindFromAction(action, savedPayload);
+                    out.add(ResultItem.of("favorite", "★ " + name, "收藏 · " + action, action, savedPayload));
                 }
             }
         } catch (Exception e) {
             // ignore
         }
+    }
+
+    /** 从 action+payload 推断 kind 用于图标渲染 */
+    private String inferKindFromAction(String action, Map<String, Object> payload) {
+        if ("plugin".equals(action)) {
+            Object k = payload.get("kind");
+            return k != null ? String.valueOf(k) : "plugin";
+        }
+        if ("sql_script".equals(action) || "sql".equals(action)) return "sql";
+        if ("open_file".equals(action)) return "file";
+        return "tool";
     }
 
     /* ---- 文件搜索 ---- */
@@ -209,5 +230,47 @@ public class SearchService {
             ps.executeUpdate();
         } catch (Exception ignored) {
         }
+    }
+
+    /* ---- 搜索历史 ---- */
+
+    private void recordHistory(String keyword) {
+        try (Connection conn = Database.getConnection()) {
+            // 去重：先删旧的同关键词记录，再插入新的
+            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM t_search_history WHERE keyword = ?")) {
+                ps.setString(1, keyword);
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO t_search_history(keyword) VALUES(?)")) {
+                ps.setString(1, keyword);
+                ps.executeUpdate();
+            }
+            // 清理：只保留最近 100 条
+            try (Statement st = conn.createStatement()) {
+                st.execute("DELETE FROM t_search_history WHERE id NOT IN (SELECT id FROM t_search_history ORDER BY id DESC LIMIT 100)");
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** 获取最近搜索历史（去重后的关键词列表） */
+    public List<Map<String, Object>> listHistory(int limit) {
+        List<Map<String, Object>> history = new ArrayList<>();
+        String sql = "SELECT keyword, MAX(id) as id, MAX(created_at) as created_at " +
+                "FROM t_search_history GROUP BY keyword ORDER BY id DESC LIMIT ?";
+        try (Connection conn = Database.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, Math.min(Math.max(limit, 1), 100));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("keyword", rs.getString("keyword"));
+                    m.put("createdAt", rs.getString("created_at"));
+                    history.add(m);
+                }
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return history;
     }
 }

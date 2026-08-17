@@ -149,11 +149,13 @@
 - 执行 SELECT 返回表格展示；DDL/DML 分离；禁止危险操作（如 drop 关键表）。
 - 注：`scripts/sql/` 目录当前为空，示例脚本待补（P2）。
 
-### FR-08 收藏与历史（P0 ✅ 基础版）
+### FR-08 搜索历史与收藏管理（P0 ✅）
 
-- `t_favorite` / `t_search_history` 表已建。
-- 历史记录搜索行为；收藏支持固定高频项。
-- 增强项（搜索历史联想、收藏管理 UI）为 P2 待办。
+- `t_favorite` / `t_search_history` 表已建，UI 已完整落地。
+- **历史联想**：搜索时自动记录关键词（去重 + 100 条上限）；面板唤起空输入时展示最近 20 条历史，点击即搜索。
+- **收藏管理**：搜索结果项右侧星标按钮一键收藏/取消；收藏面板（底部 Tab 切换）列出所有收藏，支持删除；点击收藏项直接重新执行（兼容 JS 插件 IPC 和参数表单插件）。
+- **收藏去重**：前端 `action|JSON.stringify(payload)` 复合 key 追踪星标状态；后端 `t_favorite` 存 `name/action/payload(JSON)`。
+- **API 端点**：`GET /api/history?limit=`、`GET /api/favorites`、`POST /api/favorites`、`POST /api/favorites/delete`。
 
 ### FR-09 Java 插件执行器（P2 ✅）
 
@@ -182,7 +184,7 @@
 - 调试钩子（`FASTBOX_*` 环境变量）：
   - `FASTBOX_SHOW_ON_START=1`：启动即显示面板。
   - `FASTBOX_CAPTURE_PNG=<path>`：延迟截屏保存 PNG 并退出（`FASTBOX_CAPTURE_DELAY` 控制延迟）。
-  - `FASTBOX_UI_TEST=args|js|java`：渲染层自动搜索插件并触发参数表单（自动化回归）。
+  - `FASTBOX_UI_TEST=args|js|java|search|favorites`：渲染层自动搜索插件并触发参数表单/收藏面板（自动化回归）。
 - 渲染层 `console.log/warn/error` 转发到主进程日志，便于无头调试。
 
 ---
@@ -227,6 +229,10 @@
 | `POST /api/action` | 动作执行（plugin / sql / 内置） |
 | `POST /api/exec-log` | Electron 主进程上报 JS 插件执行留痕 |
 | `GET /api/exec-logs?limit=&kind=` | 执行记录查询入口 |
+| `GET /api/history?limit=` | 搜索历史列表（去重，最近 N 条） |
+| `GET /api/favorites` | 收藏列表（含原始 action+payload） |
+| `POST /api/favorites` | 添加收藏（name/action/payload） |
+| `POST /api/favorites/delete` | 删除收藏（by id） |
 | `POST /execute`（Python 8765） | Python 插件执行 |
 
 ### 7.4 插件契约速览
@@ -308,3 +314,4 @@
 | v0.4 | 2026-08-14 | 新增 Java 插件进程级沙箱隔离（`sandbox: "process"` + 30s 超时），更新 NFR/风险/验收清单 |
 | v0.5 | 2026-08-14 | 新增执行留痕（`t_exec_log` 插件级记录 + `/api/exec-log` 上报 + `/api/exec-logs` 查询）；新增网关/Python/Electron 统一日志（轮转 + `FASTBOX_LOG_LEVEL` 级别）；插件数量上限保护；JS 异常回归插件 `fail-test` |
 | v0.6 | 2026-08-14 | 新增打包与更新策略评估：electron-updater + generic 自建服务器决策、jlink JRE + 便携 Python 随包方案、`electron-builder.yml` 骨架落地；同步 architecture.md 第九节 |
+| v0.7 | 2026-08-17 | 搜索历史联想 + 收藏管理 UI 完整落地：历史去重记录（100 条上限）、面板唤起展示历史、搜索结果星标收藏、收藏面板（Tab 切换+删除+重执行）、4 个新 API 端点；uiTest 新增 search/favorites 模式 |

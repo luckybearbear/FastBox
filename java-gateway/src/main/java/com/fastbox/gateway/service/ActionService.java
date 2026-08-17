@@ -49,6 +49,9 @@ public class ActionService {
                 case "list_plugins" -> listPlugins();
                 case "list_sql_scripts" -> listSqlScripts();
                 case "save_sql_script" -> saveSqlScript(payload);
+                case "list_favorites" -> listFavorites();
+                case "add_favorite" -> addFavorite(payload);
+                case "delete_favorite" -> deleteFavorite(payload);
                 default -> Map.of("toast", "未知动作: " + action);
             };
             // 插件动作在 runPlugin 内部记插件级留痕（含插件名/参数摘要），此处跳过避免重复
@@ -300,8 +303,90 @@ public class ActionService {
     /* ---- 收藏动作 ---- */
 
     private Map<String, Object> runFavorite(Map<String, Object> payload) {
-        // MVP：收藏作为快速入口，点击后展示其保存的动作内容
-        return Map.of("toast", "收藏功能开发中");
+        int favId = ((Number) payload.getOrDefault("favoriteId", 0)).intValue();
+        String sql = "SELECT name, action, payload FROM t_favorite WHERE id = ?";
+        try (Connection conn = Database.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, favId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return Map.of("toast", "收藏项不存在");
+                }
+                String action = rs.getString("action");
+                String payloadJson = rs.getString("payload");
+                @SuppressWarnings("unchecked")
+                Map<String, Object> savedPayload = mapper.readValue(payloadJson, Map.class);
+                // 重新执行保存的动作
+                return execute(action, savedPayload);
+            }
+        } catch (Exception e) {
+            return Map.of("toast", "收藏执行失败: " + e.getMessage());
+        }
+    }
+
+    /* ---- 收藏 CRUD ---- */
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> addFavorite(Map<String, Object> payload) {
+        String name = String.valueOf(payload.getOrDefault("name", "")).trim();
+        String action = String.valueOf(payload.getOrDefault("action", ""));
+        Object payloadObj = payload.getOrDefault("payload", Map.of());
+        if (name.isBlank()) {
+            return Map.of("toast", "收藏名称不能为空");
+        }
+        String payloadJson;
+        try {
+            payloadJson = mapper.writeValueAsString(payloadObj);
+        } catch (Exception e) {
+            return Map.of("toast", "参数序列化失败: " + e.getMessage());
+        }
+        String sql = "INSERT INTO t_favorite(name, action, payload) VALUES(?, ?, ?)";
+        try (Connection conn = Database.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, name);
+            ps.setString(2, action);
+            ps.setString(3, payloadJson);
+            ps.executeUpdate();
+            return Map.of("toast", "已收藏: " + name);
+        } catch (Exception e) {
+            return Map.of("toast", "收藏失败: " + e.getMessage());
+        }
+    }
+
+    public Map<String, Object> listFavorites() {
+        List<Map<String, Object>> favorites = new ArrayList<>();
+        String sql = "SELECT id, name, action, payload, created_at FROM t_favorite ORDER BY created_at DESC";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Map<String, Object> f = new LinkedHashMap<>();
+                f.put("id", rs.getInt("id"));
+                f.put("name", rs.getString("name"));
+                f.put("action", rs.getString("action"));
+                f.put("payload", mapper.readValue(rs.getString("payload"), Map.class));
+                f.put("createdAt", rs.getString("created_at"));
+                favorites.add(f);
+            }
+        } catch (Exception e) {
+            return Map.of("toast", "收藏列表加载失败: " + e.getMessage());
+        }
+        return Map.of("favorites", favorites);
+    }
+
+    public Map<String, Object> deleteFavorite(Map<String, Object> payload) {
+        int id = ((Number) payload.getOrDefault("id", 0)).intValue();
+        if (id <= 0) {
+            return Map.of("toast", "无效的收藏 ID");
+        }
+        String sql = "DELETE FROM t_favorite WHERE id = ?";
+        try (Connection conn = Database.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            int affected = ps.executeUpdate();
+            return affected > 0
+                    ? Map.of("toast", "已删除收藏")
+                    : Map.of("toast", "收藏项不存在");
+        } catch (Exception e) {
+            return Map.of("toast", "删除失败: " + e.getMessage());
+        }
     }
 
     /* ---- 插件列表 ---- */

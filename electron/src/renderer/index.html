@@ -21,9 +21,23 @@
       </div>
     </main>
 
-    <footer class="status-bar">
-      <span id="statusText">就绪</span>
-      <span id="toast" class="toast"></span>
+    <footer class="toolbar">
+      <div class="toolbar-left">
+        <button id="tabHistory" class="tab-btn" title="搜索历史">
+          <span class="tab-icon">&#128336;</span>
+          <span class="tab-label">历史</span>
+        </button>
+        <button id="tabFavorites" class="tab-btn" title="我的收藏">
+          <span class="tab-icon">&#9734;</span>
+          <span class="tab-label">收藏</span>
+        </button>
+      </div>
+      <div class="toolbar-center">
+        <span id="statusText">就绪</span>
+      </div>
+      <div class="toolbar-right">
+        <span id="toast" class="toast"></span>
+      </div>
     </footer>
   </div>
 
