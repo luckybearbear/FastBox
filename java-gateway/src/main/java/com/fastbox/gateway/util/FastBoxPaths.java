@@ -54,4 +54,8 @@ public class FastBoxPaths {
     public static Path javaPlugins() {
         return projectRoot().resolve("plugins/java");
     }
+
+    public static Path sqlScripts() {
+        return projectRoot().resolve("scripts/sql");
+    }
 }

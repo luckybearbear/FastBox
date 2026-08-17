@@ -34,6 +34,7 @@ public class ApiRoutes {
         app.post("/api/sql/execute", this::sqlExecute);
         app.get("/api/sql/scripts", this::listSqlScripts);
         app.post("/api/sql/save", this::saveSqlScript);
+        app.post("/api/sql/delete", this::deleteSqlScript);
         // 执行留痕：Electron 主进程上报 JS 插件执行记录 + 查询入口
         app.post("/api/exec-log", this::execLog);
         app.get("/api/exec-logs", this::execLogs);
@@ -104,6 +105,14 @@ public class ApiRoutes {
     private void saveSqlScript(Context ctx) {
         Map<String, Object> req = ctx.bodyAsClass(Map.class);
         ctx.json(action.execute("save_sql_script", req));
+    }
+
+    /* ---- POST /api/sql/delete {id} ---- */
+
+    @SuppressWarnings("unchecked")
+    private void deleteSqlScript(Context ctx) {
+        Map<String, Object> req = ctx.bodyAsClass(Map.class);
+        ctx.json(action.execute("delete_sql_script", req));
     }
 
     /* ---- POST /api/exec-log {kind, pluginName, keyword, args, costMs, status, message} ---- */

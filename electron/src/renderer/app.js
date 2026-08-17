@@ -20,13 +20,23 @@
   const argForm = $('argForm');
   const tabHistory = $('tabHistory');
   const tabFavorites = $('tabFavorites');
+  const tabSql = $('tabSql');
+  const detailTableWrap = $('detailTableWrap');
+  const detailTable = $('detailTable');
+  const sqlMetaText = $('sqlMetaText');
+  const copyCsvBtn = $('copyCsvBtn');
+  const sqlOverlay = $('sqlOverlay');
+  const sqlNameInput = $('sqlNameInput');
+  const sqlDescInput = $('sqlDescInput');
+  const sqlTextInput = $('sqlTextInput');
+  let sqlEditId = null; // 编辑中的脚本 id（null = 新建）
 
   let items = [];
   let activeIdx = -1;
   let gatewayReady = false;
   let toastTimer = null;
   let argItem = null;
-  let currentView = 'search'; // 'search' | 'history' | 'favorites'
+  let currentView = 'search'; // 'search' | 'history' | 'favorites' | 'sql'
   let favoriteIds = new Set(); // 已收藏的 action+payload 组合，用于星标高亮
 
   const KIND_ICON = { tool: '\u5DE5', file: '\u6587', python: 'Py', js: 'JS', java: 'Ja', sql: 'SQL', plugin: '\u63D2', command: '\u547D', favorite: '\u2605' };
@@ -61,13 +71,18 @@
     currentView = view;
     tabHistory.classList.toggle('active', view === 'history');
     tabFavorites.classList.toggle('active', view === 'favorites');
+    tabSql.classList.toggle('active', view === 'sql');
+  }
+
+  function backToSearch() {
+    switchView('search');
+    if (input.value.trim()) doSearch(input.value.trim());
+    else loadHistory();
   }
 
   tabHistory.addEventListener('click', () => {
     if (currentView === 'history') {
-      switchView('search');
-      if (input.value.trim()) doSearch(input.value.trim());
-      else loadHistory();
+      backToSearch();
     } else {
       switchView('history');
       loadHistory();
@@ -76,12 +91,19 @@
 
   tabFavorites.addEventListener('click', () => {
     if (currentView === 'favorites') {
-      switchView('search');
-      if (input.value.trim()) doSearch(input.value.trim());
-      else loadHistory();
+      backToSearch();
     } else {
       switchView('favorites');
       loadFavorites();
+    }
+  });
+
+  tabSql.addEventListener('click', () => {
+    if (currentView === 'sql') {
+      backToSearch();
+    } else {
+      switchView('sql');
+      loadSqlScripts();
     }
   });
 
@@ -359,6 +381,209 @@
     return 'tool';
   }
 
+  /* ---- SQL 脚本管理面板 ---- */
+  async function loadSqlScripts() {
+    try {
+      const { status, body } = await window.fastbox.call('GET', '/api/sql/scripts');
+      if (status === 200 && body && Array.isArray(body.scripts)) {
+        renderSqlScripts(body.scripts);
+      } else {
+        renderEmpty('SQL 脚本加载失败', '');
+      }
+    } catch {
+      renderEmpty('无法连接网关', '请检查 Java 网关服务');
+    }
+    statusText.textContent = '就绪';
+  }
+
+  function renderSqlScripts(scripts) {
+    emptyState.style.display = 'none';
+    list.querySelectorAll('.result-item, .panel-header, .panel-item').forEach((n) => n.remove());
+    activeIdx = -1;
+
+    const header = document.createElement('div');
+    header.className = 'panel-header';
+    header.textContent = `SQL 脚本 (${scripts.length})`;
+
+    const newBtn = document.createElement('button');
+    newBtn.className = 'btn btn-primary btn-sm';
+    newBtn.textContent = '＋ 新建';
+    newBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSqlEditor(null);
+    });
+    header.appendChild(newBtn);
+    list.appendChild(header);
+
+    if (scripts.length === 0) {
+      renderEmpty('还没有 SQL 脚本', '点击右上角「＋ 新建」创建第一个查询脚本');
+      return;
+    }
+
+    scripts.forEach((s) => {
+      const el = document.createElement('div');
+      el.className = 'panel-item';
+      el.innerHTML = `
+        <div class="panel-icon type-sql">SQL</div>
+        <div class="panel-main">
+          <div class="panel-title"></div>
+          <div class="panel-sub"></div>
+        </div>
+        <button class="panel-edit" title="编辑">✎</button>
+        <button class="panel-delete" title="删除">×</button>`;
+      el.querySelector('.panel-title').textContent = s.name;
+      el.querySelector('.panel-sub').textContent = s.description || s.sql_text.replace(/\s+/g, ' ').slice(0, 50);
+
+      el.addEventListener('click', async () => {
+        await runSqlDirect(s.sql_text, s.name);
+      });
+      el.querySelector('.panel-edit').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSqlEditor(s);
+      });
+      el.querySelector('.panel-delete').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await deleteSqlScript(s.id, s.name);
+        loadSqlScripts();
+      });
+      list.appendChild(el);
+    });
+  }
+
+  async function deleteSqlScript(id, name) {
+    try {
+      const { status, body } = await window.fastbox.call('POST', '/api/sql/delete', { id });
+      if (status === 200 && body && body.toast) showToast(body.toast);
+    } catch (e) {
+      showToast('删除失败: ' + (e.message || ''));
+    }
+  }
+
+  /* ---- SQL 编辑器 ---- */
+  function openSqlEditor(script) {
+    sqlEditId = script ? script.id : null;
+    $('sqlTitle').textContent = script ? `编辑 · ${script.name}` : '新建 SQL 脚本';
+    sqlNameInput.value = script ? script.name : '';
+    sqlDescInput.value = script ? (script.description || '') : '';
+    sqlTextInput.value = script ? script.sql_text : '';
+    sqlOverlay.classList.remove('hidden');
+    setTimeout(() => sqlNameInput.focus(), 30);
+  }
+
+  function closeSqlEditor() {
+    sqlOverlay.classList.add('hidden');
+    sqlEditId = null;
+  }
+
+  async function saveSqlEditor() {
+    const name = sqlNameInput.value.trim();
+    const sql = sqlTextInput.value.trim();
+    if (!name || !sql) {
+      showToast('名称和 SQL 不能为空');
+      return;
+    }
+    try {
+      const { status, body } = await window.fastbox.call('POST', '/api/sql/save', {
+        name,
+        description: sqlDescInput.value.trim(),
+        sql,
+      });
+      if (status === 200 && body && body.toast) showToast(body.toast);
+      closeSqlEditor();
+      loadSqlScripts();
+    } catch (e) {
+      showToast('保存失败: ' + (e.message || ''));
+    }
+  }
+
+  async function tryRunSqlEditor() {
+    const sql = sqlTextInput.value.trim();
+    if (!sql) {
+      showToast('SQL 不能为空');
+      return;
+    }
+    await runSqlDirect(sql, '试运行');
+  }
+
+  /** 直接执行 SQL 并展示结构化表格 */
+  async function runSqlDirect(sqlText, title) {
+    statusText.textContent = '执行中…';
+    try {
+      const { status, body } = await window.fastbox.call('POST', '/api/sql/execute', { sql: sqlText });
+      if (status === 200 && body) {
+        if (Array.isArray(body.columns) && Array.isArray(body.rows)) {
+          showSqlTable(body, title);
+        } else if (body.toast) {
+          showToast(body.toast);
+        }
+      } else {
+        showToast(`执行失败: HTTP ${status}`);
+      }
+    } catch (e) {
+      showToast('执行失败: ' + (e.message || ''));
+    }
+    statusText.textContent = '就绪';
+  }
+
+  /* ---- SQL 结果表格渲染 ---- */
+  function showSqlTable(body, title) {
+    const { columns, rows, cost_ms: costMs, truncated } = body;
+    detailTitle.textContent = (title || '查询结果') + ` · ${columns.length} 列 × ${rows.length} 行`;
+    sqlMetaText.textContent = `${rows.length} 行 · ${costMs != null ? costMs + ' ms' : ''}${truncated ? ' · 结果已截断' : ''}`;
+
+    // DOM API 构建表格（CSP: script-src 'self'，不用 innerHTML 拼数据）
+    detailTable.textContent = '';
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    columns.forEach((c) => {
+      const th = document.createElement('th');
+      th.textContent = c;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    detailTable.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    rows.forEach((r) => {
+      const tr = document.createElement('tr');
+      r.forEach((cell) => {
+        const td = document.createElement('td');
+        td.textContent = cell == null ? 'NULL' : String(cell);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    detailTable.appendChild(tbody);
+
+    // 切换显示：表格模式
+    detailContent.classList.add('hidden');
+    detailTableWrap.classList.remove('hidden');
+    detailOverlay.classList.remove('hidden');
+  }
+
+  function csvOf(columns, rows) {
+    const esc = (v) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [columns.map(esc).join(',')];
+    rows.forEach((r) => lines.push(r.map(esc).join(',')));
+    return lines.join('\n');
+  }
+
+  copyCsvBtn.addEventListener('click', async () => {
+    const columns = [...detailTable.querySelectorAll('thead th')].map((th) => th.textContent);
+    const rows = [...detailTable.querySelectorAll('tbody tr')].map((tr) =>
+      [...tr.querySelectorAll('td')].map((td) => td.textContent)
+    );
+    try {
+      await navigator.clipboard.writeText(csvOf(columns, rows));
+      showToast('已复制 CSV 到剪贴板');
+    } catch {
+      showToast('复制失败');
+    }
+  });
+
   async function activateFavorite(item) {
     const schema = item.payload && item.payload.argsSchema;
     if (item.action === 'plugin' && Array.isArray(schema) && schema.length > 0 && hasRequired(schema)) {
@@ -411,7 +636,10 @@
         payload: payload,
       });
       if (status === 200 && body) {
-        if (body.detail) {
+        if (Array.isArray(body.columns) && Array.isArray(body.rows)) {
+          // SQL 查询：结构化表格展示
+          showSqlTable(body, item.title);
+        } else if (body.detail) {
           showDetail(body.detail.title || item.title, body.detail.content);
         } else if (body.toast) {
           showToast(body.toast);
@@ -453,6 +681,7 @@
     if (uiTest === 'args') {
       setTimeout(() => {
         const inputs = [...argForm.querySelectorAll('.arg-field input')];
+        // uiTest 仅在 dev 模式运行，硬编码测试目录可接受；packaged 模式不会触发此分支
         if (inputs[0]) inputs[0].value = 'D:/devloper/project/myselfProject/FastBox/python-runtime/plugins';
         setTimeout(confirmArgForm, 600);
       }, 800);
@@ -508,6 +737,9 @@
   function showDetail(title, content) {
     detailTitle.textContent = title;
     detailContent.textContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+    // 切换显示：纯文本模式
+    detailTableWrap.classList.add('hidden');
+    detailContent.classList.remove('hidden');
     detailOverlay.classList.remove('hidden');
   }
 
@@ -530,6 +762,8 @@
     if (e.key === 'Escape') {
       if (!argOverlay.classList.contains('hidden')) {
         closeArgForm();
+      } else if (!sqlOverlay.classList.contains('hidden')) {
+        closeSqlEditor();
       } else if (!detailOverlay.classList.contains('hidden')) {
         detailOverlay.classList.add('hidden');
       } else {
@@ -541,6 +775,14 @@
       if (e.key === 'Enter') {
         e.preventDefault();
         confirmArgForm();
+      }
+      return;
+    }
+    if (!sqlOverlay.classList.contains('hidden')) {
+      // Ctrl+Enter 保存 SQL
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        saveSqlEditor();
       }
       return;
     }
@@ -561,6 +803,15 @@
   $('detailClose').addEventListener('click', () => detailOverlay.classList.add('hidden'));
   detailOverlay.addEventListener('click', (e) => {
     if (e.target === detailOverlay) detailOverlay.classList.add('hidden');
+  });
+
+  /* ---- SQL 编辑器事件 ---- */
+  $('sqlClose').addEventListener('click', closeSqlEditor);
+  $('sqlCancel').addEventListener('click', closeSqlEditor);
+  $('sqlSave').addEventListener('click', saveSqlEditor);
+  $('sqlRun').addEventListener('click', tryRunSqlEditor);
+  sqlOverlay.addEventListener('click', (e) => {
+    if (e.target === sqlOverlay) closeSqlEditor();
   });
 
   /* ---- 启动探测 ---- */
@@ -633,6 +884,23 @@
     setTimeout(async () => {
       tabFavorites.click();
       console.log('[uitest] favorites tab clicked');
+    }, 2500);
+  } else if (uiTest === 'sqlpanel') {
+    // 点击 SQL Tab，用于截图脚本管理面板
+    setTimeout(async () => {
+      tabSql.click();
+      console.log('[uitest] sql tab clicked');
+    }, 2500);
+  } else if (uiTest === 'sql') {
+    // 搜索并执行数据库概览脚本，用于截图表格结果
+    setTimeout(async () => {
+      input.value = '\u6570\u636E\u5E93\u6982\u89C8';
+      input.dispatchEvent(new Event('input'));
+      setTimeout(() => {
+        const first = list.querySelector('.result-item');
+        if (first) first.click();
+        console.log('[uitest] sql script triggered');
+      }, 2000);
     }, 2500);
   }
 })();

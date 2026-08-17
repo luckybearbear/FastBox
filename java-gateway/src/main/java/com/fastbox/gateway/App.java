@@ -2,6 +2,7 @@ package com.fastbox.gateway;
 
 import com.fastbox.gateway.db.Database;
 import com.fastbox.gateway.plugin.PluginScanner;
+import com.fastbox.gateway.service.SqlScriptScanner;
 import com.fastbox.gateway.server.ApiRoutes;
 import io.javalin.Javalin;
 import org.slf4j.Logger;
@@ -29,6 +30,9 @@ public class App {
 
         int plugins = new PluginScanner().scan();
         log.info("插件扫描完成: 注册/更新 {} 个插件", plugins);
+
+        int scripts = new SqlScriptScanner().scan();
+        log.info("SQL 脚本扫描完成: 新注册 {} 个", scripts);
 
         Javalin app = Javalin.create(cfg -> {
             cfg.showJavalinBanner = false;

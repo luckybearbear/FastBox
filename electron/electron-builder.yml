@@ -1,13 +1,20 @@
-# FastBox electron-builder 打包骨架（P3 评估产物，2026-08-14）
+# FastBox electron-builder 打包配置（P3 完成版）
 #
-# 目标形态：跨平台分发包 = Electron 外壳 + 内置 JRE(jlink) + 便携 Python + 网关 jar + 初始插件
-# 完整打包为 P3 待办；本文件为配置骨架，可通过 `npx electron-builder --win` 试跑验证
+# 目标形态：跨平台分发包 = Electron 外壳 + 内置 jlink JRE + 便携 Python + 网关 jar + 初始插件
+# 完整流程：见 scripts/build-runtime.ps1（jlink JRE + portable venv）+ 本文件（electron-builder 装配）
 #
-# 打包前置准备（在正式打包前需完成，见 docs/architecture.md 第九节）：
-#   1. jlink 生成精简 JRE：./scripts/build-runtime.ps1（骨架未含脚本，命令示例见第九节）
-#   2. 便携 Python：python-runtime/.venv 已含解释器 + fastapi/uvicorn，随 extraResources 拷贝
-#   3. 路径改造：main.js 打包模式需从 process.resourcesPath 解析 GATEWAY_JAR / python / data 目录
-#   4. 图标：assets/icon.ico (win)、assets/icon.icns (mac) 目前为空目录，需补充
+# 关键路径契约（main.js / logger.js 同步实现）：
+#   process.resourcesPath/runtime/gateway/fastbox-gateway.jar  — Java 网关 shaded jar
+#   process.resourcesPath/runtime/jre17/bin/java(.exe)        — 精简 JRE 入口
+#   process.resourcesPath/runtime/python/.venv/Scripts/python.exe + main.py — 便携 Python
+#   process.resourcesPath/plugins/{js,python,java}            — 内置插件（用户安装后可扩展）
+#   app.getPath('userData')/data                              — SQLite + 日志（Program Files 无写权限）
+#
+# 打包前置（在执行 npm run dist 前必须完成）：
+#   1. ./scripts/build-runtime.ps1            # 生成 jre17 + portable venv
+#   2. cd electron && npm install              # 装 electron-builder
+#   3. 准备图标：electron/assets/icon.ico     # win 图标（mac/linux 类似）
+#   4. （可选）npm run build:runtime          # 步骤 1 的便捷入口
 
 appId: com.fastbox.app
 productName: FastBox
@@ -28,9 +35,12 @@ extraResources:
   - from: ../java-gateway/target/fastbox-gateway.jar
     to: runtime/gateway/fastbox-gateway.jar
   # 精简 JRE 17（jlink 产物，目标 <projectRoot>/runtime/jre17）
+  # 文件大小 <60MB，剔除 debug/man，减少分发包体积
   - from: ../runtime/jre17
     to: runtime/jre17
   # 便携 Python 运行时：解释器 + 依赖 + 内置 Python 插件
+  # 注意：开发模式下 .venv 基于 WorkBuddy Python 创建，pyvenv.cfg 含绝对路径
+  # 必须用 scripts/build-runtime.ps1 -PyOnly 重建为 portable venv 才能跨机分发
   - from: ../python-runtime
     to: runtime/python
     filter:
@@ -39,6 +49,7 @@ extraResources:
       - plugins/**/*
       - .venv/**/*
   # 初始插件目录（js/python/java 三类；打包版安装后用户可自行扩展）
+  # python/plugins/ 镜像自 python-runtime/plugins/，方便外部直接 require
   - from: ../plugins
     to: plugins
 

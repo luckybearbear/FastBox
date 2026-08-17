@@ -4,11 +4,29 @@
  * 统一写入 data/logs/electron.log（与网关 / Python 日志同目录），
  * 支持 10MB 大小轮转（保留 electron.log.1 一份历史）。
  * 级别由 FASTBOX_LOG_LEVEL 控制：debug < info < warn < error（默认 info）。
+ *
+ * 数据目录：
+ * - 开发模式：FastBox/data/logs/electron.log
+ * - 打包模式：app.getPath('userData')/data/logs/electron.log  （Program Files 无写权限，必须走 userData）
+ * - 可由 FASTBOX_DATA_DIR 环境变量强制覆盖（CI / 自定义场景）
  */
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = process.env.FASTBOX_DATA_DIR || path.join(__dirname, '..', '..', '..', 'data');
+function resolveDataDir() {
+  if (process.env.FASTBOX_DATA_DIR) return process.env.FASTBOX_DATA_DIR;
+  // require electron 后 app.isPackaged / app.getPath 即可访问
+  try {
+    const { app } = require('electron');
+    if (app.isPackaged) return path.join(app.getPath('userData'), 'data');
+  } catch {
+    // 不在 Electron 进程内（如 CLI 工具直接 require logger）
+  }
+  // 开发模式：与 main.js resolvePaths 一致
+  return path.join(__dirname, '..', '..', '..', 'data');
+}
+
+const DATA_DIR = resolveDataDir();
 const LOG_DIR = path.join(DATA_DIR, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'electron.log');
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB

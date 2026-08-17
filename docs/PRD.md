@@ -157,7 +157,17 @@
 - **收藏去重**：前端 `action|JSON.stringify(payload)` 复合 key 追踪星标状态；后端 `t_favorite` 存 `name/action/payload(JSON)`。
 - **API 端点**：`GET /api/history?limit=`、`GET /api/favorites`、`POST /api/favorites`、`POST /api/favorites/delete`。
 
-### FR-09 Java 插件执行器（P2 ✅）
+### FR-09 SQL 可视化与脚本管理（P0 ✅）
+
+- **结果表格渲染**：后端返回 `columns` / `rows` / `cost_ms`，前端用 DOM API 构建 `<table>`（表头 sticky、斑马纹、横向滚动）；`showSqlTable()` 与 `showDetail()` 双模式互斥切换。
+- **复制 CSV**：单元格 hover 选中态 + 一键 `navigator.clipboard.writeText`，字段含逗号/换行/引号时自动加引号转义。
+- **脚本管理面板**：底部 toolbar 新增「SQL」Tab，列出 `t_sql_script` 全部脚本，含运行/编辑/删除按钮；新建/编辑共用 `sqlOverlay` 编辑器（名称/描述/SQL 文本域 + Ctrl+Enter 保存）。
+- **scripts/sql/ 目录扫描**：新增 `SqlScriptScanner`（参照 `PluginScanner`），启动时扫描 `scripts/sql/*.sql`，解析首部 `-- name:` / `-- description:` 注释，幂等注册到 `t_sql_script`（同名内容相同跳过，不同则覆盖以文件为准）。
+- **示例脚本**（`scripts/sql/`）：`exec-top10.sql`（执行日志 Top10）、`search-stats.sql`（搜索历史统计）、`plugin-list.sql`（插件清单）、`favorite-list.sql`（收藏清单）、`db-overview.sql`（数据库概览）。
+- **API 端点**：`POST /api/sql/delete`（删除脚本，与 `/api/sql/save` 形成完整 CRUD）。
+- **uiTest**：新增 `sqlpanel`（截图 SQL 管理面板）、`sql`（截图 SQL 表格结果）。
+
+### FR-10 Java 插件执行器（P2 ✅）
 
 - 已实现：独立 ClassLoader 加载 `plugins/java/<name>/<name>.jar`。
 - SPI 规范：`com.fastbox.plugin.spi.FastBoxPlugin`，签名 `Map run(String keyword, List<String> args, Map userConfig)`，插件 jar 自带接口副本。
@@ -167,7 +177,7 @@
 - 前端路由：`KIND_ICON/KIND_LABEL` 增加 `java`；`uiTest=java` 自动化测试已支持。
 - 待办：进程级沙箱隔离为 P2（见 §十 风险）。
 
-### FR-10 系统底层能力（P0/P2）
+### FR-11 系统底层能力（P0/P2）
 
 | 能力 | 状态 | 说明 |
 |------|------|------|
@@ -177,14 +187,14 @@
 | GPU 兼容 | ✅ | 沙箱/远程桌面：`disableHardwareAcceleration` + `--disable-gpu* --no-sandbox` |
 | 日志 | ✅ | `data/logs/{gateway,python,electron}.log` 统一目录；logback 按天+10MB 轮转保留 7 份；Python RotatingFileHandler 10MB/7 份；Electron 10MB 轮转；级别均受 `FASTBOX_LOG_LEVEL` 控制 |
 | 自动更新 | ⏳ 方案已定 | electron-updater + generic 自建更新服务器（P2）；决策见 architecture.md 第九节 |
-| 跨平台打包 | ⏳ 骨架完成 | electron-builder 骨架 + 内置 jlink JRE + 便携 Python（P3 完整打包待办）；`electron/electron-builder.yml` 已落地 |
+| 跨平台打包 | ✅ | electron-builder 配置 + main.js 路径改造（`process.resourcesPath` 解析）+ jlink JRE + portable Python（`scripts/build-runtime.ps1`）+ Python 自拉起；`electron/electron-builder.yml` 已落地。完整安装包产出待跑（依赖图标 + jlink + venv 重建，可通过 `npm run dist` 完成） |
 
-### FR-11 开发者体验（P1 ✅）
+### FR-12 开发者体验（P1 ✅）
 
 - 调试钩子（`FASTBOX_*` 环境变量）：
   - `FASTBOX_SHOW_ON_START=1`：启动即显示面板。
   - `FASTBOX_CAPTURE_PNG=<path>`：延迟截屏保存 PNG 并退出（`FASTBOX_CAPTURE_DELAY` 控制延迟）。
-  - `FASTBOX_UI_TEST=args|js|java|search|favorites`：渲染层自动搜索插件并触发参数表单/收藏面板（自动化回归）。
+  - `FASTBOX_UI_TEST=args|js|java|search|favorites|sqlpanel|sql`：渲染层自动搜索插件并触发参数表单/收藏面板/脚本面板/表格结果（自动化回归）。
 - 渲染层 `console.log/warn/error` 转发到主进程日志，便于无头调试。
 
 ---
@@ -233,6 +243,10 @@
 | `GET /api/favorites` | 收藏列表（含原始 action+payload） |
 | `POST /api/favorites` | 添加收藏（name/action/payload） |
 | `POST /api/favorites/delete` | 删除收藏（by id） |
+| `POST /api/sql/execute` | 直接执行 SQL（带结构化 columns/rows/cost_ms） |
+| `GET /api/sql/scripts` | SQL 脚本列表（含 sql_text） |
+| `POST /api/sql/save` | 保存/更新 SQL 脚本（name/description/sql） |
+| `POST /api/sql/delete` | 删除 SQL 脚本（by id） |
 | `POST /execute`（Python 8765） | Python 插件执行 |
 
 ### 7.4 插件契约速览
@@ -256,9 +270,9 @@
 | M5 跨语言调用 | Java → Python 链路 | ✅ |
 | M6 JS 插件加载器 | 本地 IPC 执行 + 热重载 | ✅ |
 | M7 参数通道 | args_schema 表单 + 校验 | ✅ |
-| M8 SQL 可视化 | 脚本执行表格展示 | ✅ 基础版 |
+| M8 SQL 可视化 | 脚本执行表格展示 | ✅ 完善版（表格渲染+管理面板） |
 | M9 Java 插件执行器 | jar 加载 + SPI 规范 + 热重载 | ✅ |
-| M10 打包分发 | electron-builder + JRE + 便携 Python | ⏳ P3 骨架完成（electron-builder.yml + 决策记录）；完整打包待办 |
+| M10 打包分发 | electron-builder + JRE + 便携 Python | ✅ 代码层完成（main.js 路径改造 + Python 自拉起 + build-runtime.ps1）；NSIS 安装包产出待图标到位后 `npm run dist` |
 
 ---
 
@@ -289,7 +303,9 @@
 - [x] 日志统一：`data/logs/{gateway,python,electron}.log`，级别 `FASTBOX_LOG_LEVEL` 可配，文件轮转不无限增长
 - [x] 所有服务在线：Electron + Java 网关 + Python FastAPI
 - [x] 打包与更新策略已评估：architecture.md 第九节决策记录 + `electron/electron-builder.yml` 骨架（extraResources 含 jre/python/gateway/plugins）
-- [ ] 完整打包冒烟：jlink JRE 生成、便携 Python 跨机验证、main.js 打包路径改造、`electron-builder --win` 产出安装包（P3）
+- [x] main.js 路径改造（`app.isPackaged` 分支 + `process.resourcesPath` 解析 GATEWAY_JAR/JRE/JS plugins）+ Python 自拉起 + 数据目录走 `app.getPath('userData')`
+- [x] scripts/build-runtime.ps1 一站式生成 jlink JRE + portable Python
+- [ ] 完整打包冒烟：图标（icon.ico）补充后 `npm run dist` 产出 NSIS 安装包（P3 收尾）
 
 ---
 
@@ -315,3 +331,4 @@
 | v0.5 | 2026-08-14 | 新增执行留痕（`t_exec_log` 插件级记录 + `/api/exec-log` 上报 + `/api/exec-logs` 查询）；新增网关/Python/Electron 统一日志（轮转 + `FASTBOX_LOG_LEVEL` 级别）；插件数量上限保护；JS 异常回归插件 `fail-test` |
 | v0.6 | 2026-08-14 | 新增打包与更新策略评估：electron-updater + generic 自建服务器决策、jlink JRE + 便携 Python 随包方案、`electron-builder.yml` 骨架落地；同步 architecture.md 第九节 |
 | v0.7 | 2026-08-17 | 搜索历史联想 + 收藏管理 UI 完整落地：历史去重记录（100 条上限）、面板唤起展示历史、搜索结果星标收藏、收藏面板（Tab 切换+删除+重执行）、4 个新 API 端点；uiTest 新增 search/favorites 模式 |
+| v0.8 | 2026-08-17 | #19 SQL 可视化完善（结构化表格渲染 + 复制 CSV + SQL 脚本管理面板 + 新建/编辑编辑器）+ #20 示例 SQL 脚本 5 个（exec-top10/search-stats/plugin-list/favorite-list/db-overview）+ SqlScriptScanner 启动扫描 scripts/sql/ 注册到 t_sql_script；#22 P3 完整打包代码层面落地：main.js `app.isPackaged` 双模式路径解析 + Python FastAPI 自拉起 + logger.js 数据目录走 userData + electron-builder 依赖 + scripts/build-runtime.ps1 一站式构建脚本；剩余图标 + 实际 NSIS 产出待 P3 收尾 |

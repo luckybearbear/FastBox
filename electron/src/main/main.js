@@ -26,13 +26,68 @@ app.commandLine.appendSwitch('disable-gpu-compositing');
 app.commandLine.appendSwitch('in-process-gpu');
 app.commandLine.appendSwitch('no-sandbox');
 
+/**
+ * 路径解析统一中心 — 同时处理开发模式与打包模式。
+ *
+ * 开发模式（npm start）：__dirname = FastBox/electron/src/main，上跳 3 级到 FastBox 根。
+ * 打包模式（electron-builder）：代码在 app.asar 内，外部组件放在 process.resourcesPath 下：
+ *   resources/runtime/gateway/fastbox-gateway.jar
+ *   resources/runtime/jre17/bin/java(.exe)
+ *   resources/runtime/python/.venv/Scripts/python.exe
+ *   resources/runtime/python/main.py
+ *   resources/plugins/js/<name>/main.js
+ *   resources/plugins/{python,java}/...  （跟随 python-runtime/plugins / plugins/java 镜像）
+ *
+ * 数据目录（SQLite + 日志）：打包后必须可写，因此走 Electron 的 userData（避免 Program Files 无权限）
+ * 开发模式仍走 FastBox/data。
+ */
+function resolvePaths() {
+  const isPackaged = app.isPackaged;
+  const resourcesPath = process.resourcesPath;
+
+  if (isPackaged) {
+    // 打包模式：外部组件路径统一基于 process.resourcesPath
+    const javaBin = process.platform === 'win32' ? 'java.exe' : 'java';
+    const pythonBin = process.platform === 'win32' ? 'python.exe' : 'python';
+    return {
+      isPackaged: true,
+      gatewayJar: path.join(resourcesPath, 'runtime', 'gateway', 'fastbox-gateway.jar'),
+      javaExe: path.join(resourcesPath, 'runtime', 'jre17', 'bin', javaBin),
+      pythonExe: path.join(resourcesPath, 'runtime', 'python', '.venv',
+        process.platform === 'win32' ? 'Scripts' : 'bin', pythonBin),
+      pythonCwd: path.join(resourcesPath, 'runtime', 'python'),
+      jsPluginsDir: path.join(resourcesPath, 'plugins', 'js'),
+      // 数据目录用 userData（Windows 上默认 %APPDATA%\FastBox），子目录 data/ 与开发模式保持一致
+      dataDir: path.join(app.getPath('userData'), 'data'),
+    };
+  }
+  // 开发模式：从 main.js 上跳 3 级到 FastBox 根（electron/src/main → electron/src → electron → FastBox）
+  const projectRoot = path.resolve(__dirname, '..', '..', '..');
+  return {
+    isPackaged: false,
+    gatewayJar: process.env.FASTBOX_GATEWAY_JAR
+      || path.join(projectRoot, 'java-gateway', 'target', 'fastbox-gateway.jar'),
+    javaExe: 'java', // 开发模式用系统 PATH 中的 java
+    // Python 在开发模式由用户手动启动；spawn 调用方需先判断 ensurePython / 已 alive
+    pythonExe: null,
+    pythonCwd: null,
+    jsPluginsDir: path.join(projectRoot, 'plugins', 'js'),
+    dataDir: process.env.FASTBOX_DATA_DIR || path.join(projectRoot, 'data'),
+  };
+}
+
+const PATHS = resolvePaths();
+console.log(`[paths] packaged=${PATHS.isPackaged} data=${PATHS.dataDir}`);
+
+// 子进程环境变量：把数据目录注入 Java/Python 子进程，避免它们各自依赖 user.dir / __file__ 推导
+const CHILD_ENV = { ...process.env, FASTBOX_DATA_DIR: PATHS.dataDir };
 const GATEWAY_URL = process.env.FASTBOX_GATEWAY_URL || 'http://127.0.0.1:8764';
-const GATEWAY_JAR = process.env.FASTBOX_GATEWAY_JAR || path.join(__dirname, '..', '..', 'java-gateway', 'target', 'fastbox-gateway.jar');
 const TOGGLE_SHORTCUT = process.env.FASTBOX_SHORTCUT || 'CommandOrControl+Shift+Space';
 
 let mainWindow = null;
 let tray = null;
 let gatewayProc = null;
+let pythonProc = null;
 let isQuitting = false;
 
 /* ---------------- 网关探测与拉起 ---------------- */
@@ -61,13 +116,17 @@ async function isGatewayAlive() {
 async function ensureGateway() {
   if (await isGatewayAlive()) return true;
   try {
-    gatewayProc = spawn('java', ['-jar', GATEWAY_JAR], {
-      cwd: path.join(__dirname, '..', '..', 'java-gateway'),
+    const javaHome = PATHS.isPackaged ? path.dirname(path.dirname(PATHS.javaExe)) : null;
+    const env = javaHome ? { ...CHILD_ENV, JAVA_HOME: javaHome } : CHILD_ENV;
+    gatewayProc = spawn(PATHS.javaExe, ['-jar', PATHS.gatewayJar], {
+      cwd: PATHS.dataDir,
+      env,
       stdio: 'ignore',
       detached: true,
       windowsHide: true,
     });
     gatewayProc.unref();
+    console.log(`[gateway] 已 spawn: ${PATHS.javaExe} -jar ${PATHS.gatewayJar}`);
     // 最多等 15 秒让 JVM 起来
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 500));
@@ -76,6 +135,51 @@ async function ensureGateway() {
     return false;
   } catch (e) {
     console.error('[gateway] 拉起失败:', e.message);
+    return false;
+  }
+}
+
+async function isPythonAlive() {
+  try {
+    const res = await httpGet('http://127.0.0.1:8765/health', 800);
+    return res.status === 200;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 确保 Python FastAPI 在 8765 在线。
+ * - 打包模式：从 bundled .venv 启动，cwd 设为 runtime/python（main.py 在此）
+ * - 开发模式：若 Python 已手动启动则放行；否则提示用户在终端执行 `python python-runtime/main.py`
+ */
+async function ensurePython() {
+  if (await isPythonAlive()) return true;
+  if (!PATHS.pythonExe) {
+    console.warn('[python] 开发模式未配置自拉起，请手动启动: python python-runtime/main.py');
+    return false;
+  }
+  if (!fs.existsSync(PATHS.pythonExe)) {
+    console.error(`[python] 解释器不存在: ${PATHS.pythonExe}`);
+    return false;
+  }
+  try {
+    pythonProc = spawn(PATHS.pythonExe, ['main.py'], {
+      cwd: PATHS.pythonCwd,
+      env: CHILD_ENV,
+      stdio: 'ignore',
+      detached: true,
+      windowsHide: true,
+    });
+    pythonProc.unref();
+    console.log(`[python] 已 spawn: ${PATHS.pythonExe} main.py (cwd=${PATHS.pythonCwd})`);
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      if (await isPythonAlive()) return true;
+    }
+    return false;
+  } catch (e) {
+    console.error('[python] 拉起失败:', e.message);
     return false;
   }
 }
@@ -172,7 +276,7 @@ function createTray() {
 
 /* ---------------- JS 插件执行器 ---------------- */
 
-const JS_PLUGINS_DIR = path.join(__dirname, '..', '..', '..', 'plugins', 'js');
+const JS_PLUGINS_DIR = PATHS.jsPluginsDir;
 
 /**
  * 在主进程内执行 JS 插件
@@ -253,6 +357,8 @@ function reportExecLog(body) {
 
 ipcMain.handle('gateway:call', async (_evt, method, endpoint, body) => {
   await ensureGateway();
+  // Python 是 Java 网关的依赖，确保 Java 已通后再补拉起 Python
+  await ensurePython();
   return await httpRequest(method, `${GATEWAY_URL}${endpoint}`, body);
 });
 
@@ -302,9 +408,10 @@ app.whenReady().then(async () => {
   const ok = globalShortcut.register(TOGGLE_SHORTCUT, togglePanel);
   console.log(`[hotkey] ${TOGGLE_SHORTCUT} ${ok ? '注册成功' : '注册失败（可能被占用）'}`);
 
-  // 后台拉起网关（不阻塞启动）
+  // 后台拉起网关 + Python（不阻塞启动）
   setTimeout(async () => {
     const alive = await ensureGateway();
+    await ensurePython();
     if (mainWindow) {
       mainWindow.webContents.send('status:gateway', alive ? 'ready' : 'failed');
       mainWindow.webContents.send('status:toast', alive ? '网关服务已就绪' : '网关启动失败，请查看 data/logs');
@@ -338,6 +445,9 @@ app.whenReady().then(async () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  // 关停主进程拉起的子进程
+  if (gatewayProc) { try { gatewayProc.kill(); } catch {} }
+  if (pythonProc) { try { pythonProc.kill(); } catch {} }
 });
 
 app.on('window-all-closed', (e) => {

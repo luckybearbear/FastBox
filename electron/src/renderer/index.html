@@ -31,6 +31,10 @@
           <span class="tab-icon">&#9734;</span>
           <span class="tab-label">收藏</span>
         </button>
+        <button id="tabSql" class="tab-btn" title="SQL 脚本管理">
+          <span class="tab-icon">&#9707;</span>
+          <span class="tab-label">SQL</span>
+        </button>
       </div>
       <div class="toolbar-center">
         <span id="statusText">就绪</span>
@@ -47,7 +51,45 @@
         <span id="detailTitle">详情</span>
         <button id="detailClose" class="btn-close" title="关闭">×</button>
       </header>
+      <div id="detailTableWrap" class="sql-table-wrap hidden">
+        <div class="sql-table-meta">
+          <span id="sqlMetaText"></span>
+          <button id="copyCsvBtn" class="btn btn-ghost btn-sm">复制 CSV</button>
+        </div>
+        <div class="sql-table-scroll">
+          <table id="detailTable" class="sql-table"></table>
+        </div>
+      </div>
       <pre id="detailContent" class="detail-content"></pre>
+    </div>
+  </div>
+
+  <div id="sqlOverlay" class="overlay hidden">
+    <div class="detail-panel sql-panel">
+      <header class="detail-header">
+        <span id="sqlTitle">SQL 脚本</span>
+        <button id="sqlClose" class="btn-close" title="取消">×</button>
+      </header>
+      <div class="sql-editor-form">
+        <div class="arg-field">
+          <label for="sqlNameInput">名称<span class="req">*</span></label>
+          <input id="sqlNameInput" type="text" placeholder="脚本名称（搜索用）" />
+        </div>
+        <div class="arg-field">
+          <label for="sqlDescInput">描述</label>
+          <input id="sqlDescInput" type="text" placeholder="用途说明（可选）" />
+        </div>
+        <div class="arg-field">
+          <label for="sqlTextInput">SQL 语句<span class="req">*</span></label>
+          <textarea id="sqlTextInput" rows="8" placeholder="SELECT ..." spellcheck="false"></textarea>
+          <span class="arg-hint">仅支持 SELECT / WITH 查询；写操作受安全护栏限制</span>
+        </div>
+      </div>
+      <footer class="arg-actions">
+        <button id="sqlCancel" class="btn btn-ghost">取消</button>
+        <button id="sqlRun" class="btn btn-ghost">试运行</button>
+        <button id="sqlSave" class="btn btn-primary">保存</button>
+      </footer>
     </div>
   </div>
 

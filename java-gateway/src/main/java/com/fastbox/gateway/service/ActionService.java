@@ -49,6 +49,7 @@ public class ActionService {
                 case "list_plugins" -> listPlugins();
                 case "list_sql_scripts" -> listSqlScripts();
                 case "save_sql_script" -> saveSqlScript(payload);
+                case "delete_sql_script" -> deleteSqlScript(payload);
                 case "list_favorites" -> listFavorites();
                 case "add_favorite" -> addFavorite(payload);
                 case "delete_favorite" -> deleteFavorite(payload);
@@ -460,6 +461,25 @@ public class ActionService {
             return Map.of("toast", "SQL 脚本已保存: " + name);
         } catch (Exception e) {
             return Map.of("toast", "SQL 脚本保存失败: " + e.getMessage());
+        }
+    }
+
+    /* ---- 删除 SQL 脚本 ---- */
+
+    private Map<String, Object> deleteSqlScript(Map<String, Object> payload) {
+        int id = ((Number) payload.getOrDefault("id", 0)).intValue();
+        if (id <= 0) {
+            return Map.of("toast", "无效的脚本 ID");
+        }
+        String sql = "DELETE FROM t_sql_script WHERE id = ?";
+        try (Connection conn = Database.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            int affected = ps.executeUpdate();
+            return affected > 0
+                    ? Map.of("toast", "SQL 脚本已删除")
+                    : Map.of("toast", "SQL 脚本不存在");
+        } catch (Exception e) {
+            return Map.of("toast", "SQL 脚本删除失败: " + e.getMessage());
         }
     }
 

@@ -181,7 +181,11 @@ html, body {
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
+.panel-header .btn { text-transform: none; letter-spacing: 0; }
 .panel-item {
   display: flex;
   align-items: center;
@@ -378,3 +382,84 @@ html, body {
   border: 1px solid var(--accent);
 }
 .btn-primary:hover { background: var(--accent); color: #fff; }
+.btn-sm { padding: 3px 10px; font-size: 12px; }
+.detail-content.hidden { display: none; }
+
+/* ---- SQL 结果表格 ---- */
+.sql-table-wrap {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sql-table-wrap.hidden { display: none; }
+.sql-table-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.sql-table-scroll { overflow: auto; max-height: 52vh; }
+.sql-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  font-family: "Cascadia Code", Consolas, monospace;
+}
+.sql-table th, .sql-table td {
+  padding: 6px 12px;
+  text-align: left;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--border);
+}
+.sql-table th {
+  position: sticky;
+  top: 0;
+  background: #1e1f23;
+  color: var(--text-dim);
+  font-weight: 600;
+  border-bottom: 1px solid var(--text-dim);
+}
+.sql-table tbody tr:nth-child(odd) { background: rgba(255, 255, 255, 0.025); }
+.sql-table tbody tr:hover { background: rgba(90, 140, 255, 0.08); }
+.sql-table td { user-select: text; }
+
+/* ---- SQL 脚本编辑器 ---- */
+.sql-panel { width: 90%; max-width: 560px; }
+.sql-editor-form {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.sql-editor-form textarea {
+  background: #232428;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  line-height: 1.6;
+  padding: 8px 10px;
+  outline: none;
+  resize: vertical;
+}
+.sql-editor-form textarea:focus { border-color: var(--accent); }
+
+/* ---- 面板行编辑按钮 ---- */
+.panel-edit {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.panel-edit:hover { color: var(--accent); }
